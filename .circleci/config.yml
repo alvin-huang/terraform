@@ -1,0 +1,54 @@
+---
+version: 2.1
+
+references:
+  paths:
+    test-results: &TEST_RESULTS_DIR /tmp/test-results
+
+  environment: &ENVIRONMENT
+    CONSUL_VERSION: 0.7.5
+    GOMAXPROCS: 4
+    GO111MODULE: on
+    GOPROXY: https://proxy.golang.org/
+
+executors:
+  go:
+    docker:
+      - image: circleci/golang:1.14
+    environment:
+      CONSUL_VERSION: 0.7.5
+      GOMAXPROCS: 4
+      GO111MODULE: "on"
+      GOPROXY: https://proxy.golang.org/
+      TEST_RESULTS: &TEST_RESULTS_DIR /tmp/test-results
+
+jobs:
+  go-test:
+    executor:
+      name: go
+    steps:
+      - checkout
+      - run:
+          name: install consul
+          command: |
+            curl -sLo consul.zip https://releases.hashicorp.com/consul/${CONSUL_VERSION}/consul_${CONSUL_VERSION}_linux_amd64.zip
+            unzip consul.zip
+            mkdir -p ~/bin
+            mv consul ~/bin
+            echo 'export PATH="~/bin:$PATH"'
+      - run:
+          name: install tools
+          command: |
+            bash scripts/gogetcookie.sh
+            make tools
+      - run: make fmtcheck generate
+      - run: make test
+      - run: go mod verify
+      - run: make e2etest
+      - run: GOOS=windows go build -mod=vendor
+
+workflows:
+  version: 2
+  test:
+    jobs:
+      - go-test
